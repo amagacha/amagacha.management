@@ -31,9 +31,54 @@
 - `404.html`: SPAルート用のフォールバック
 - `.nojekyll`: Jekyll処理の無効化
 - `robots.txt`: 検索エンジンのクロール禁止
+- `start-server.bat`: Windowsでローカル確認するための起動ファイル
+
+Windowsでローカル確認する場合は、`index.html`を直接開かず `start-server.bat` をダブルクリックしてください。直接開いて白画面になるのは、ブラウザが `file://` のJavaScriptモジュールを制限するためです。
 
 ## Supabaseの安全性
 
 `config.js` に入っているのはブラウザ公開用のSupabase URLとanonキーだけです。anonキーはRLSと組み合わせて使う公開キーです。`service_role`キー、DBパスワード、Management APIトークンは絶対にアップロードしないでください。
 
 Supabase Dashboardの `Authentication` → `URL Configuration` で、公開後のGitHub Pages URLをSite URLまたはRedirect URLsに追加してください。将来メール確認やパスワードリセットを使う場合に必要です。
+
+## プロジェクトサイト用の重要設定
+
+通常のリポジトリで `https://ユーザー名.github.io/リポジトリ名/` として公開する場合、アップロード前に `config.js` の末尾を変更します。
+
+```js
+window.__KAISHI_BASE_PATH__ = "/リポジトリ名";
+```
+
+例としてリポジトリ名が `kaishi` なら、次のようにします。
+
+```js
+window.__KAISHI_BASE_PATH__ = "/kaishi";
+```
+
+この設定により、リンク移動とブラウザ再読み込みの両方がGitHub Pagesのサブフォルダ内で動作します。
+
+## オーナー専用アカウント登録について
+
+画面のアカウント管理はSupabase Edge Function `admin-users` を使用します。Edge Functionはservice_roleキーをサーバー側だけで使用するため、GitHub PagesのJavaScriptには秘密鍵を含めません。
+
+この関数は `supabase/functions/admin-users/index.ts` に同梱しています。Supabase Dashboardの Edge Functions から `admin-users` としてデプロイし、`SUPABASE_SERVICE_ROLE_KEY` をサーバー側の秘密値として設定してください。Edge Functionのデプロイ権限があるSupabaseアクセストークンを使える場合は、プロジェクトルートで次を実行できます。
+
+```bash
+supabase functions deploy admin-users --project-ref lpzlhxfzosycqcgevfhk
+```
+
+デプロイ後、設定画面のオーナー専用「アカウント・権限管理」から名前・メールアドレス・一人ずつ異なる既定パスワード・権限を入力して登録できます。既定パスワードは表示せず、サーバー側で暗号化して保存します。
+
+## 権限
+
+- オーナー：全機能、ユーザー登録、権限変更、既定パスワード変更
+- 管理者：商品・在庫・経費・生産の管理、売上管理
+- 社員：売上登録、在庫参照、生産操作
+
+日次パスワード更新を有効にするには、Edge Functionの環境変数に `ADMIN_USERS_ENCRYPTION_KEY`（32バイトBase64）と `DAILY_RESET_SECRET` を設定し、Supabase Cronまたは外部スケジューラから毎日次のJSONをPOSTしてください。ヘッダーの `x-cron-secret` は `DAILY_RESET_SECRET` と同じ値にします。
+
+```json
+{"action":"daily_reset"}
+```
+
+実行先は `https://lpzlhxfzosycqcgevfhk.supabase.co/functions/v1/admin-users` です。既定パスワードは平文でデータベースに保存されません。
